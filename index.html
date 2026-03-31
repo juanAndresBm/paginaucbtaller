@@ -1,14 +1,164 @@
 <!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mi Primera Página</title>
-</head>
-<body>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <title>WebAR - Teletransporte Sin Marcador (Markerless)</title>
+    
+    <script src="https://aframe.io/releases/1.3.0/aframe.min.js"></script>
+    
+    <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
 
-    <h1>Hola Mundo</h1>
-    <p>¡Bienvenido a mi sitio web!</p>
+    <style>
+  /* --- ESTADO INICIAL (AR activada) --- */
+  /* AR.js suele manejar esto, pero nos aseguramos */
+  .a-canvas {
+    width: 100% !important;
+    height: 100% !important;
+    top: 0 !important;
+    left: 0 !important;
+    position: absolute;
+  }
 
-</body>
+  /* --- ESTADO TELETRANSPORTADO (Vista 360) --- */
+  /* Cuando el body tiene la clase 'in-360' */
+  body.in-360 video {
+    display: none !important; /* Ocultamos la webcam */
+  }
+
+  /* ESTO ES LO NUEVO: Forzamos al canvas a usar todo el viewport */
+  body.in-360 .a-canvas {
+    width: 100vw !important;  /* 100% del ancho de ventana */
+    height: 100vh !important; /* 100% del alto de ventana */
+    object-fit: cover;        /* Asegura que llene el espacio sin estirarse */
+  }
+</style>
+  </head>
+
+  <body style="margin: 0; overflow: hidden;">
+    
+    <a-scene 
+      embedded="false" 
+      arjs="sourceType: webcam; debugUIEnabled: false;"
+      cursor="rayOrigin: mouse"
+      raycaster="objects: .clickable"
+    >
+      
+      <a-assets>
+        <img id="panorama-img" src="interestelar360WP.jpg">
+        <audio id="alarma-sound" src="alarma.mp3" preload="auto"></audio>
+        <audio id="ambiente-sound" src="ambiente.mp3" preload="auto"></audio>
+        <audio id="locucion-sound" src="locucion.mp3" preload="auto"></audio>
+      </a-assets>
+
+      <a-box 
+        id="portal-cube"
+        class="clickable"
+        position="0 1.6 -4" 
+        material="color: #4CC3D9; opacity: 0.9; transparent: true; emissive: #ffffff; emissiveIntensity: 0.3"
+        animation="property: rotation; to: 0 360 0; loop: true; dur: 6000; easing: linear"
+        onclick="teleportTo360()"
+      >
+        <a-text value="TOCA PARA\nENTRAR" align="center" position="0 1.2 0" color="black" scale="0.8 0.8 0.8" wrap-count="15"></a-text>
+      </a-box>
+      
+      <a-entity light="type: ambient; color: #FFF; intensity: 0.8"></a-entity>
+      <a-entity id="emergency-light" light="type: point; color: #FF4500; intensity: 0.0; distance: 50; decay: 1" position="0 3 -5" visible="false"></a-entity>
+
+      <!-- Entidades de Sonido -->
+      <a-entity id="alarma" sound="src: #alarma-sound; loop: true; autoplay: false; volume: 0.7;"></a-entity>
+      <a-entity id="ambiente" sound="src: #ambiente-sound; loop: true; autoplay: false; volume: 1;"></a-entity>
+      <a-entity id="locucion" sound="src: #locucion-sound; autoplay: false; volume: 1.2;"></a-entity>
+
+      <a-sky 
+        id="sky-360" 
+        src="#panorama-img" 
+        visible="false" 
+        material="side: double; opacity: 0"
+        animation__fadein="property: material.opacity; from: 0; to: 1; dur: 1200; startEvents: fadein"
+      ></a-sky>
+
+      <a-camera id="main-camera" wasd-controls look-controls>
+        </a-camera>
+
+    </a-scene>
+
+    <script>
+      function teleportTo360() {
+        const sceneEl = document.querySelector('a-scene');
+        const portalCubeEl = document.querySelector('#portal-cube');
+        const skyEl = document.querySelector('#sky-360');
+        const bodyEl = document.querySelector('body');
+        const cameraEl = document.querySelector('#main-camera');
+        const ambientLightEl = document.querySelector('a-entity[light*="type: ambient"]');
+        const emergencyLightEl = document.querySelector('#emergency-light');
+
+        // Referencias a las entidades de sonido
+        const alarmaSoundEl = document.querySelector('#alarma');
+        const ambienteSoundEl = document.querySelector('#ambiente');
+        const locucionSoundEl = document.querySelector('#locucion');
+
+
+        console.log("Iniciando teletransporte markerless...");
+
+        // 1. Añadimos la clase CSS al body para ocultar la webcam
+        bodyEl.classList.add('in-360');
+
+        // 2. Ocultamos el cubo portal
+        portalCubeEl.setAttribute('visible', 'false');
+
+        // 3. Hacemos visible el cielo 360 y lanzamos fade-in
+        skyEl.setAttribute('visible', 'true');
+        skyEl.emit('fadein'); // Lanza la animación definida en el a-sky
+
+        // 4. Detenemos los sistemas de AR.js
+        // Aunque no hay marcador, AR.js sigue analizando frames de video.
+        // Pausarlo ahorra mucha batería y rendimiento en el móvil.
+        sceneEl.systems['arjs'].pause();
+
+        // 5. INICIAMOS LOS SONIDOS
+        // Reproducimos los sonidos en bucle
+        alarmaSoundEl.components.sound.playSound();
+        ambienteSoundEl.components.sound.playSound();
+        
+        // Reproducimos la locución y la programamos para que se repita cada 40s
+        locucionSoundEl.components.sound.playSound();
+        setInterval(() => {
+          // Detenemos por si acaso seguía sonando y la reiniciamos
+          locucionSoundEl.components.sound.stopSound();
+          locucionSoundEl.components.sound.playSound();
+        }, 40000); // 40000 milisegundos = 40 segundos
+
+        // 6. INICIAMOS LOS FALLOS DE ENERGÍA
+        emergencyLightEl.setAttribute('visible', 'true');
+
+        setInterval(() => {
+          const isPowerDrop = Math.random() < 0.2;
+          const isEmergencyFlash = Math.random() > 0.5;
+
+          // Variación de la luz ambiental para un efecto más dramático
+          const ambientIntensity = isPowerDrop ? 0.2 : 0.7; // Bajones de luz más suaves
+          ambientLightEl.setAttribute('animation__intensity', `property: light.intensity; to: ${ambientIntensity}; dur: 800; easing: easeInOutQuad`);
+
+          // Parpadeo de la luz de emergencia con mayor intensidad
+          const emergencyIntensity = isEmergencyFlash ? 4 : 0; // Transición suave de la luz roja
+          emergencyLightEl.setAttribute('animation__intensity', `property: light.intensity; to: ${emergencyIntensity}; dur: 800; easing: easeInOutQuad`);
+
+          // MAGIA AQUÍ: Transición suave de color en el cielo 360
+          let targetColor = '#ffffff';
+          if (isPowerDrop) {
+            targetColor = '#444444'; // Oscurece la imagen gradualmente
+          } else if (isEmergencyFlash) {
+            targetColor = '#ff6666'; // Tiñe la imagen de rojo de emergencia suavemente
+          }
+          skyEl.setAttribute('animation__color', `property: material.color; type: color; to: ${targetColor}; dur: 800; easing: easeInOutQuad`);
+
+        }, 1000); // Aumentamos el intervalo a 1 segundo para permitir que la animación sea fluida
+
+        // [Opcional] 7. Reiniciar posición de cámara
+        // Si el usuario se movió con WASD, lo devolvemos al centro (0, 1.6, 0)
+        // cameraEl.setAttribute('position', '0 1.6 0');
+      }
+    </script>
+  </body>
 </html>
